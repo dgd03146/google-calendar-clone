@@ -1,45 +1,49 @@
-import { useBreakpoint } from '@/hooks/useBreakpoint';
 import { useState } from 'react';
+import type { CalendarEvent } from '../types/event';
 import { CalendarTimeGrid } from './CalendarTimeGrid';
 import { CalendarWeekHeader } from './CalendarWeekHeader';
 import { EventModal } from './EventModal';
 
 export const CalendarMain = () => {
-  const breakpoint = useBreakpoint();
   const currentDate = new Date();
-  const [selectedDate, setSelectedDate] = useState<Date>(new Date());
-  const [selectedHour, setSelectedHour] = useState<number>(9);
+
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [modalPosition, setModalPosition] = useState({ x: 0, y: 0 });
+  const [selectedDate, setSelectedDate] = useState(new Date());
+  const [selectedHour, setSelectedHour] = useState(9);
+  const [editingEvent, setEditingEvent] = useState<CalendarEvent | null>(null);
 
   const handleCellClick = (day: Date, hour: number) => {
-    const modalWidth = breakpoint.isMobile ? 360 : breakpoint.isTablet ? 400 : 448;
-    const modalHeight = 500;
-
-    const x = (window.innerWidth - modalWidth) / 2;
-    const y = (window.innerHeight - modalHeight) / 2;
-
     setSelectedDate(day);
     setSelectedHour(hour);
-    setModalPosition({ x, y });
+    setEditingEvent(null);
+    setIsModalOpen(true);
+  };
+
+  const handleEventClick = (event: CalendarEvent) => {
+    setEditingEvent(event);
     setIsModalOpen(true);
   };
 
   const handleModalClose = () => {
     setIsModalOpen(false);
+    setEditingEvent(null);
   };
 
   return (
     <div className="flex flex-col h-full w-full overflow-x-auto">
       <CalendarWeekHeader currentDate={currentDate} />
-      <CalendarTimeGrid currentDate={currentDate} onCellClick={handleCellClick} />
+      <CalendarTimeGrid
+        currentDate={currentDate}
+        onCellClick={handleCellClick}
+        onEventClick={handleEventClick}
+      />
 
       <EventModal
         isOpen={isModalOpen}
         onClose={handleModalClose}
         selectedDate={selectedDate}
         selectedHour={selectedHour}
-        position={modalPosition}
+        editingEvent={editingEvent}
       />
     </div>
   );
