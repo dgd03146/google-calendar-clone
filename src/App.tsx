@@ -1,10 +1,16 @@
-import './App.css';
+import { CalendarHeader } from '@/features/calendar/components/CalendarHeader';
+import { CalendarSidebar } from '@/features/calendar/components/CalendarSidebar';
+import { CalendarMain } from '@/features/calendar/components/CalendarMain';
 
 function App() {
   return (
-    <>
-      <h1 className="text-3xl font-bold text-primary">Ringle Frontend Task</h1>
-    </>
+    <div className="flex flex-col h-dvh">
+      <CalendarHeader />
+      <main className="flex flex-1">
+        <CalendarSidebar />
+        <CalendarMain />
+      </main>
+    </div>
   );
 }
 
