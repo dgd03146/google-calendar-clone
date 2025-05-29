@@ -1,9 +1,12 @@
-import { useBreakpoint } from '@/hooks/useBreakpoint';
-import { format } from 'date-fns';
+import { useAppDispatch } from '@/store/hooks';
+import { format, parse } from 'date-fns';
 import { ko } from 'date-fns/locale';
-import { ChevronDown, Clock, Repeat, X } from 'lucide-react';
+import { ChevronDown, Clock, Repeat, Trash2, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { EVENT_CONFIG } from '../config/eventConfig';
+import { addEvent, deleteEvent, updateEvent } from '../store/eventsSlice';
+import type { CalendarEvent, CreateEventData, RepeatType } from '../types/event';
 import {
   calculateEndTime,
   formatTimeWithPeriod,
@@ -17,7 +20,18 @@ interface EventModalProps {
   onClose: () => void;
   selectedDate?: Date;
   selectedHour?: number;
-  position?: { x: number; y: number };
+  editingEvent?: CalendarEvent | null;
+}
+
+interface EventFormState extends Omit<CreateEventData, 'date'> {
+  date: Date;
+}
+
+interface DropdownState {
+  showDatePicker: boolean;
+  showStartTimeDropdown: boolean;
+  showEndTimeDropdown: boolean;
+  showRepeatDropdown: boolean;
 }
 
 export const EventModal = ({
@@ -25,30 +39,81 @@ export const EventModal = ({
   onClose,
   selectedDate = new Date(),
   selectedHour = 9,
-  position = { x: 0, y: 0 },
+  editingEvent,
 }: EventModalProps) => {
-  const breakpoint = useBreakpoint();
+  const dispatch = useAppDispatch();
   const modalRef = useRef<HTMLDivElement>(null);
-  const [title, setTitle] = useState('');
-  const [date, setDate] = useState(selectedDate);
-  const [startTime, setStartTime] = useState(`${selectedHour.toString().padStart(2, '0')}:00`);
-  const [endTime, setEndTime] = useState(`${(selectedHour + 1).toString().padStart(2, '0')}:00`);
-  const [showDatePicker, setShowDatePicker] = useState(false);
-  const [showStartTimeDropdown, setShowStartTimeDropdown] = useState(false);
-  const [showEndTimeDropdown, setShowEndTimeDropdown] = useState(false);
-  const [repeatType, setRepeatType] = useState<'none' | 'daily' | 'weekly' | 'monthly'>('none');
-  const [showRepeatDropdown, setShowRepeatDropdown] = useState(false);
+  const isEditMode = !!editingEvent;
+
+  const [formState, setFormState] = useState<EventFormState>(() => ({
+    title: editingEvent?.title || '',
+    date: editingEvent ? parse(editingEvent.date, 'yyyy-MM-dd', new Date()) : selectedDate,
+    startTime: editingEvent?.startTime || `${selectedHour.toString().padStart(2, '0')}:00`,
+    endTime: editingEvent?.endTime || `${(selectedHour + 1).toString().padStart(2, '0')}:00`,
+    repeatType: editingEvent?.repeatType || EVENT_CONFIG.DEFAULT_REPEAT_TYPE,
+  }));
+
+  const [dropdownState, setDropdownState] = useState<DropdownState>({
+    showDatePicker: false,
+    showStartTimeDropdown: false,
+    showEndTimeDropdown: false,
+    showRepeatDropdown: false,
+  });
+
+  const [isSaving, setIsSaving] = useState(false);
+
+  const updateFormState = (updates: Partial<EventFormState>) => {
+    setFormState(prev => ({ ...prev, ...updates }));
+  };
+
+  const updateDropdownState = (updates: Partial<DropdownState>) => {
+    setDropdownState(prev => ({ ...prev, ...updates }));
+  };
+
+  const closeAllDropdowns = () => {
+    setDropdownState({
+      showDatePicker: false,
+      showStartTimeDropdown: false,
+      showEndTimeDropdown: false,
+      showRepeatDropdown: false,
+    });
+  };
 
   useEffect(() => {
-    setDate(selectedDate);
-  }, [selectedDate]);
+    if (isOpen) {
+      setDropdownState({
+        showDatePicker: false,
+        showStartTimeDropdown: false,
+        showEndTimeDropdown: false,
+        showRepeatDropdown: false,
+      });
+    }
+  }, [isOpen]);
 
   useEffect(() => {
-    const newStartTime = `${selectedHour.toString().padStart(2, '0')}:00`;
-    const newEndTime = calculateEndTime(newStartTime);
-    setStartTime(newStartTime);
-    setEndTime(newEndTime);
-  }, [selectedHour]);
+    if (editingEvent) {
+      setFormState({
+        title: editingEvent.title || '',
+        date: parse(editingEvent.date, 'yyyy-MM-dd', new Date()),
+        startTime: editingEvent.startTime,
+        endTime: editingEvent.endTime,
+        repeatType: editingEvent.repeatType || EVENT_CONFIG.DEFAULT_REPEAT_TYPE,
+      });
+    } else {
+      updateFormState({ date: selectedDate });
+    }
+  }, [editingEvent, selectedDate]);
+
+  useEffect(() => {
+    if (!editingEvent) {
+      const newStartTime = `${selectedHour.toString().padStart(2, '0')}:00`;
+      const newEndTime = calculateEndTime(newStartTime);
+      updateFormState({
+        startTime: newStartTime,
+        endTime: newEndTime,
+      });
+    }
+  }, [selectedHour, editingEvent]);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -68,242 +133,308 @@ export const EventModal = ({
 
   const timeOptions = generateTimeOptions();
 
-  const modalWidth = breakpoint.isMobile
-    ? Math.min(breakpoint.width - 20, 360)
-    : breakpoint.isTablet
-      ? 400
-      : 448;
+  const getEndTimeOptions = () => {
+    const startTimeMinutes =
+      parseTime(formState.startTime).hour * 60 + parseTime(formState.startTime).minute;
+    return timeOptions.filter(option => {
+      const optionTime = parseTime(option.value);
+      const optionMinutes = optionTime.hour * 60 + optionTime.minute;
+      return optionMinutes > startTimeMinutes;
+    });
+  };
 
   const handleDateSelect = (newDate: Date) => {
-    setDate(newDate);
-    setShowDatePicker(false);
+    updateFormState({ date: newDate });
+    updateDropdownState({ showDatePicker: false });
   };
 
   const handleStartTimeChange = (timeValue: string) => {
-    setStartTime(timeValue);
-    setEndTime(calculateEndTime(timeValue));
-    setShowStartTimeDropdown(false);
+    const updates: Partial<EventFormState> = { startTime: timeValue };
+
+    const newStartMinutes = parseTime(timeValue).hour * 60 + parseTime(timeValue).minute;
+    const currentEndMinutes =
+      parseTime(formState.endTime).hour * 60 + parseTime(formState.endTime).minute;
+
+    if (currentEndMinutes <= newStartMinutes) {
+      updates.endTime = calculateEndTime(timeValue);
+    }
+
+    updateFormState(updates);
+    updateDropdownState({ showStartTimeDropdown: false });
   };
 
   const handleEndTimeChange = (timeValue: string) => {
-    setEndTime(timeValue);
-    setShowEndTimeDropdown(false);
+    updateFormState({ endTime: timeValue });
+    updateDropdownState({ showEndTimeDropdown: false });
   };
 
-  const handleRepeatChange = (type: 'none' | 'daily' | 'weekly' | 'monthly') => {
-    setRepeatType(type);
-    setShowRepeatDropdown(false);
+  const handleRepeatChange = (type: RepeatType) => {
+    updateFormState({ repeatType: type });
+    updateDropdownState({ showRepeatDropdown: false });
   };
 
-  const getRepeatLabel = (type: 'none' | 'daily' | 'weekly' | 'monthly') => {
-    switch (type) {
-      case 'none':
-        return '반복 안함';
-      case 'daily':
-        return '매일';
-      case 'weekly':
-        return '매주';
-      case 'monthly':
-        return '매월';
-      default:
-        return '반복 안함';
+  const getRepeatLabel = (type: RepeatType) => {
+    const option = EVENT_CONFIG.REPEAT_OPTIONS.find(opt => opt.value === type);
+    return option?.label || EVENT_CONFIG.REPEAT_OPTIONS[0].label;
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    setIsSaving(true);
+
+    try {
+      const eventData: CreateEventData = {
+        title: formState.title?.trim() || EVENT_CONFIG.DEFAULT_TITLE,
+        date: format(formState.date, 'yyyy-MM-dd'),
+        startTime: formState.startTime,
+        endTime: formState.endTime,
+        repeatType: formState.repeatType || EVENT_CONFIG.DEFAULT_REPEAT_TYPE,
+      };
+
+      if (isEditMode && editingEvent) {
+        dispatch(updateEvent({ id: editingEvent.id, data: eventData }));
+        alert('이벤트가 수정되었습니다!');
+      } else {
+        dispatch(addEvent(eventData));
+        alert('이벤트가 저장되었습니다!');
+      }
+
+      if (!isEditMode) {
+        updateFormState({ title: '', repeatType: EVENT_CONFIG.DEFAULT_REPEAT_TYPE });
+      }
+
+      onClose();
+    } catch (error) {
+      console.error('Failed to save event:', error);
+      alert('이벤트 저장에 실패했습니다. 다시 시도해주세요.');
+    } finally {
+      setIsSaving(false);
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    console.log('Event created:', { title, date, startTime, endTime, repeatType });
-    onClose();
+  const handleDelete = async () => {
+    if (!editingEvent) return;
+
+    if (confirm('이벤트를 삭제하시겠습니까?')) {
+      try {
+        dispatch(deleteEvent(editingEvent.id));
+        alert('이벤트가 삭제되었습니다!');
+        onClose();
+      } catch (error) {
+        console.error('Failed to delete event:', error);
+        alert('이벤트 삭제에 실패했습니다. 다시 시도해주세요.');
+      }
+    }
   };
 
   if (!isOpen) return null;
 
-  const startTimeParsed = parseTime(startTime);
-  const endTimeParsed = parseTime(endTime);
+  const startTimeParsed = parseTime(formState.startTime);
+  const endTimeParsed = parseTime(formState.endTime);
 
   const modalContent = (
-    <div
-      ref={modalRef}
-      className="fixed z-50 bg-white rounded-lg shadow-xl border border-gray-200"
-      style={{
-        left: `${position.x}px`,
-        top: `${position.y}px`,
-        width: `${modalWidth}px`,
-      }}
-    >
-      <div className="flex items-center justify-between py-2 px-4 border-b border-gray-200">
-        <h2 className="text-lg font-medium">새 이벤트</h2>
-        <button onClick={onClose} className="p-1 hover:bg-gray-100 rounded-full transition-colors">
-          <X className="h-4 w-4 text-gray-500" />
-        </button>
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
+      <div
+        ref={modalRef}
+        className="relative bg-white rounded-lg shadow-xl border border-gray-200 w-full max-w-md h-auto pointer-events-auto"
+      >
+        <div className="flex items-center justify-between py-2 px-4 border-b border-gray-200">
+          <h2 className="text-lg font-medium">{isEditMode ? '이벤트 수정' : '새 이벤트'}</h2>
+          <div className="flex items-center space-x-1">
+            {isEditMode && (
+              <button
+                type="button"
+                onClick={handleDelete}
+                className="p-1 hover:bg-red-100 rounded-full transition-colors"
+                title="이벤트 삭제"
+              >
+                <Trash2 className="h-4 w-4 text-red-500" />
+              </button>
+            )}
+            <button
+              onClick={onClose}
+              className="p-1 hover:bg-gray-100 rounded-full transition-colors"
+            >
+              <X className="h-4 w-4 text-gray-500" />
+            </button>
+          </div>
+        </div>
+
+        <form onSubmit={handleSubmit} className="p-4 space-y-4">
+          <div>
+            <input
+              type="text"
+              placeholder="제목 추가"
+              value={formState.title || ''}
+              onChange={e => updateFormState({ title: e.target.value })}
+              className="w-full text-base font-medium border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              autoFocus
+            />
+          </div>
+
+          <div className="flex items-start space-x-3 py-2">
+            <Clock className="h-4 w-4 text-gray-500 mt-1" />
+            <div className="flex-1 space-y-3">
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => {
+                    updateDropdownState({ showDatePicker: !dropdownState.showDatePicker });
+                    closeAllDropdowns();
+                    updateDropdownState({ showDatePicker: !dropdownState.showDatePicker });
+                  }}
+                  className="flex items-center justify-between w-full text-sm text-gray-700 hover:bg-gray-50 p-2 rounded border"
+                >
+                  <span>{format(formState.date, 'M월 d일 (E)', { locale: ko })}</span>
+                  <ChevronDown className="h-3 w-3 text-gray-500" />
+                </button>
+
+                {dropdownState.showDatePicker && (
+                  <div className="absolute top-full left-0 mt-1 bg-white border border-gray-200 rounded-md shadow-lg z-30">
+                    <MiniCalendar selectedDate={formState.date} onDateSelect={handleDateSelect} />
+                  </div>
+                )}
+              </div>
+
+              <div className="flex items-center space-x-2">
+                <div className="relative flex-1">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      closeAllDropdowns();
+                      updateDropdownState({
+                        showStartTimeDropdown: !dropdownState.showStartTimeDropdown,
+                      });
+                    }}
+                    className="flex items-center justify-between w-full text-sm text-gray-600 hover:bg-gray-50 p-2 rounded border"
+                  >
+                    <span>
+                      {formatTimeWithPeriod(startTimeParsed.hour, startTimeParsed.minute)}
+                    </span>
+                    <ChevronDown className="h-3 w-3 text-gray-500" />
+                  </button>
+
+                  {dropdownState.showStartTimeDropdown && (
+                    <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-md shadow-lg z-30 max-h-48 overflow-y-auto">
+                      {timeOptions.map(option => (
+                        <button
+                          key={option.value}
+                          type="button"
+                          onClick={() => handleStartTimeChange(option.value)}
+                          className="block w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                        >
+                          {option.label}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <span className="text-sm text-gray-500">-</span>
+
+                <div className="relative flex-1">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      closeAllDropdowns();
+                      updateDropdownState({
+                        showEndTimeDropdown: !dropdownState.showEndTimeDropdown,
+                      });
+                    }}
+                    className="flex items-center justify-between w-full text-sm text-gray-600 hover:bg-gray-50 p-2 rounded border"
+                  >
+                    <span>{formatTimeWithPeriod(endTimeParsed.hour, endTimeParsed.minute)}</span>
+                    <ChevronDown className="h-3 w-3 text-gray-500" />
+                  </button>
+
+                  {dropdownState.showEndTimeDropdown && (
+                    <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-md shadow-lg z-30 max-h-48 overflow-y-auto">
+                      {getEndTimeOptions().length > 0 ? (
+                        getEndTimeOptions().map(option => (
+                          <button
+                            key={option.value}
+                            type="button"
+                            onClick={() => handleEndTimeChange(option.value)}
+                            className="block w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                          >
+                            {option.label}
+                          </button>
+                        ))
+                      ) : (
+                        <div className="px-3 py-2 text-sm text-gray-500">
+                          선택 가능한 시간이 없습니다
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex items-start space-x-3 py-2">
+            <Repeat className="h-4 w-4 text-gray-500 mt-1" />
+            <div className="flex-1">
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => {
+                    closeAllDropdowns();
+                    updateDropdownState({ showRepeatDropdown: !dropdownState.showRepeatDropdown });
+                  }}
+                  className="flex items-center justify-between w-full text-sm text-gray-700 hover:bg-gray-50 p-2 rounded border"
+                >
+                  <span>
+                    {getRepeatLabel(formState.repeatType || EVENT_CONFIG.DEFAULT_REPEAT_TYPE)}
+                  </span>
+                  <ChevronDown className="h-3 w-3 text-gray-500" />
+                </button>
+
+                {dropdownState.showRepeatDropdown && (
+                  <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-md shadow-lg z-30">
+                    {EVENT_CONFIG.REPEAT_OPTIONS.map(option => (
+                      <button
+                        key={option.value}
+                        type="button"
+                        onClick={() => handleRepeatChange(option.value)}
+                        className={`block w-full text-left px-3 py-2 text-sm hover:bg-gray-50 ${
+                          formState.repeatType === option.value
+                            ? 'bg-blue-50 text-blue-700'
+                            : 'text-gray-700'
+                        }`}
+                      >
+                        {option.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+
+          <div className="flex justify-end space-x-2 pt-4">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-md transition-colors"
+            >
+              취소
+            </button>
+            <button
+              type="submit"
+              disabled={isSaving}
+              className={`px-4 py-2 text-sm font-medium text-white rounded-md transition-colors ${
+                isSaving ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'
+              }`}
+            >
+              {isSaving ? '저장 중...' : '저장'}
+            </button>
+          </div>
+        </form>
       </div>
-
-      <form onSubmit={handleSubmit} className="p-4 space-y-4">
-        <div>
-          <input
-            type="text"
-            placeholder="제목 추가"
-            value={title}
-            onChange={e => setTitle(e.target.value)}
-            className="w-full text-base font-medium border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            autoFocus
-          />
-        </div>
-
-        <div className="flex items-start space-x-3 py-2">
-          <Clock className="h-4 w-4 text-gray-500 mt-1" />
-          <div className="flex-1 space-y-3">
-            <div className="relative">
-              <button
-                type="button"
-                onClick={() => {
-                  setShowDatePicker(!showDatePicker);
-                  setShowStartTimeDropdown(false);
-                  setShowEndTimeDropdown(false);
-                  setShowRepeatDropdown(false);
-                }}
-                className="flex items-center justify-between w-full text-sm text-gray-700 hover:bg-gray-50 p-2 rounded border"
-              >
-                <span>{format(date, 'M월 d일 (E)', { locale: ko })}</span>
-                <ChevronDown className="h-3 w-3 text-gray-500" />
-              </button>
-
-              {showDatePicker && (
-                <div className="absolute top-full left-0 mt-1 bg-white border border-gray-200 rounded-md shadow-lg z-30">
-                  <MiniCalendar selectedDate={date} onDateSelect={handleDateSelect} />
-                </div>
-              )}
-            </div>
-
-            <div className="flex items-center space-x-2">
-              <div className="relative flex-1">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowStartTimeDropdown(!showStartTimeDropdown);
-                    setShowDatePicker(false);
-                    setShowEndTimeDropdown(false);
-                    setShowRepeatDropdown(false);
-                  }}
-                  className="flex items-center justify-between w-full text-sm text-gray-600 hover:bg-gray-50 p-2 rounded border"
-                >
-                  <span>{formatTimeWithPeriod(startTimeParsed.hour, startTimeParsed.minute)}</span>
-                  <ChevronDown className="h-3 w-3 text-gray-500" />
-                </button>
-
-                {showStartTimeDropdown && (
-                  <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-md shadow-lg z-30 max-h-48 overflow-y-auto">
-                    {timeOptions.map(option => (
-                      <button
-                        key={option.value}
-                        type="button"
-                        onClick={() => handleStartTimeChange(option.value)}
-                        className="block w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
-                      >
-                        {option.label}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              <span className="text-sm text-gray-500">-</span>
-
-              <div className="relative flex-1">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowEndTimeDropdown(!showEndTimeDropdown);
-                    setShowDatePicker(false);
-                    setShowStartTimeDropdown(false);
-                    setShowRepeatDropdown(false);
-                  }}
-                  className="flex items-center justify-between w-full text-sm text-gray-600 hover:bg-gray-50 p-2 rounded border"
-                >
-                  <span>{formatTimeWithPeriod(endTimeParsed.hour, endTimeParsed.minute)}</span>
-                  <ChevronDown className="h-3 w-3 text-gray-500" />
-                </button>
-
-                {showEndTimeDropdown && (
-                  <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-md shadow-lg z-30 max-h-48 overflow-y-auto">
-                    {timeOptions.map(option => (
-                      <button
-                        key={option.value}
-                        type="button"
-                        onClick={() => handleEndTimeChange(option.value)}
-                        className="block w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
-                      >
-                        {option.label}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="flex items-start space-x-3 py-2">
-          <Repeat className="h-4 w-4 text-gray-500 mt-1" />
-          <div className="flex-1">
-            <div className="relative">
-              <button
-                type="button"
-                onClick={() => {
-                  setShowRepeatDropdown(!showRepeatDropdown);
-                  setShowDatePicker(false);
-                  setShowStartTimeDropdown(false);
-                  setShowEndTimeDropdown(false);
-                }}
-                className="flex items-center justify-between w-full text-sm text-gray-700 hover:bg-gray-50 p-2 rounded border"
-              >
-                <span>{getRepeatLabel(repeatType)}</span>
-                <ChevronDown className="h-3 w-3 text-gray-500" />
-              </button>
-
-              {showRepeatDropdown && (
-                <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-md shadow-lg z-30">
-                  {[
-                    { value: 'none' as const, label: '반복 안함' },
-                    { value: 'daily' as const, label: '매일' },
-                    { value: 'weekly' as const, label: '매주' },
-                    { value: 'monthly' as const, label: '매월' },
-                  ].map(option => (
-                    <button
-                      key={option.value}
-                      type="button"
-                      onClick={() => handleRepeatChange(option.value)}
-                      className={`block w-full text-left px-3 py-2 text-sm hover:bg-gray-50 ${
-                        repeatType === option.value ? 'bg-blue-50 text-blue-700' : 'text-gray-700'
-                      }`}
-                    >
-                      {option.label}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-
-        <div className="flex justify-end space-x-2 pt-4">
-          <button
-            type="button"
-            onClick={onClose}
-            className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-md transition-colors"
-          >
-            취소
-          </button>
-          <button
-            type="submit"
-            className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md transition-colors"
-          >
-            저장
-          </button>
-        </div>
-      </form>
     </div>
   );
 
-  return createPortal(modalContent, document.getElementById('modal-root') || document.body);
+  return createPortal(modalContent, document.getElementById('modal-root')!);
 };
