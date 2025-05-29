@@ -6,7 +6,7 @@ export const getWeekDays = (currentDate: Date): Date[] => {
   return Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
 };
 
-export const getHours = (): number[] => {
+export const get24Hours = (): number[] => {
   return Array.from({ length: 24 }, (_, i) => i);
 };
 
