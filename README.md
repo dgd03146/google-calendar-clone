@@ -1,54 +1,84 @@
-# React + TypeScript + Vite
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
 
-Currently, two official plugins are available:
+## 📌 구글 캘린더 클론 구현
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+일정을 추가하고 관리할 수 있는 **주간 캘린더 앱**을 구현했습니다.
+React 기반으로 Redux 상태 관리를 적용했고, 실제로 사용할 수 있는 수준의 UI/UX를 목표로 개발했습니다.
 
-## Expanding the ESLint configuration
+---
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+## 구현 기능 요약
 
-```js
-export default tseslint.config({
-  extends: [
-    // Remove ...tseslint.configs.recommended and replace with this
-    ...tseslint.configs.recommendedTypeChecked,
-    // Alternatively, use this for stricter rules
-    ...tseslint.configs.strictTypeChecked,
-    // Optionally, add this for stylistic rules
-    ...tseslint.configs.stylisticTypeChecked,
-  ],
-  languageOptions: {
-    // other options...
-    parserOptions: {
-      project: ['./tsconfig.node.json', './tsconfig.app.json'],
-      tsconfigRootDir: import.meta.dirname,
-    },
-  },
-});
+### 📅 캘린더 뷰 & 네비게이션
+
+* 주간 뷰 완성 (월간 뷰 구조만 준비됨)
+* 이전/다음 주, 오늘로 이동하는 네비게이션 제공
+* 주간 헤더에서 날짜 클릭 시 해당 날짜로 이동 가능
+
+### 📝 이벤트 기능
+
+* 일정 생성/수정/삭제 가능
+* 셀 클릭 또는 사이드바 버튼으로 이벤트 생성
+* 시작/종료 시간 선택 (24시간제)
+* 반복 옵션: 매일/매주/매월/매년
+* 겹치는 이벤트는 자동으로 레이아웃 정리됨
+* 날짜별 색상 자동 할당
+
+### 🎨 UI/UX 관련
+
+* 미니 캘린더로 빠른 날짜 이동
+* 뷰 모드 선택 드롭다운 + 클릭 아웃사이드 닫힘 처리
+* 반응형 대응
+* 이벤트 모달 UI 개선 (사용성 위주)
+
+### ⚙ 상태 관리 및 성능
+
+* Redux Toolkit 사용해 전역 상태 관리
+* Redux Persist로 새로고침 후에도 상태 유지
+* 커스텀 훅으로 타입 안전성 확보 (`useAppDispatch`, `useAppSelector`)
+* props drilling 없이 필요한 상태만 구독
+
+---
+
+## 사용 기술 스택
+
+* **React + TypeScript**
+* **Redux Toolkit + Persist**
+* **Tailwind CSS** (빠른 UI 구성)
+* **date-fns** (가볍고 트리 셰이킹 가능한 날짜 라이브러리)
+* **React Day Picker** (미니 캘린더용)
+
+---
+
+## 폴더 구조 개요
+
+기능 단위 중심으로 분리했습니다.
+
+```
+src/
+├── components/          # 공통 UI
+├── features/calendar/   # 캘린더 관련 기능 (컴포넌트, 상태, 유틸 등)
+├── hooks/               # 커스텀 훅
+├── store/               # Redux 스토어 설정
+├── types/               # 타입 정의
+└── lib/                 # 공통 유틸
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+---
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x';
-import reactDom from 'eslint-plugin-react-dom';
+## 실행 방법
 
-export default tseslint.config({
-  plugins: {
-    // Add the react-x and react-dom plugins
-    'react-x': reactX,
-    'react-dom': reactDom,
-  },
-  rules: {
-    // other rules...
-    // Enable its recommended typescript rules
-    ...reactX.configs['recommended-typescript'].rules,
-    ...reactDom.configs.recommended.rules,
-  },
-});
+```bash
+npm install     # 의존성 설치
+npm run dev     # 로컬 개발 서버 실행
+npm run build   # 배포용 빌드
+npm run lint    # 린트 검사
 ```
+
+---
+
+## 기타 참고사항
+
+* ESLint + Prettier 세팅되어 있어 커밋 전 코드 포맷 자동 적용됨
+* 반복 일정, 드래그 이동 등은 현재 미구현 상태 (확장 가능성 고려하여 구조 설계)
+* 컴포넌트 결합도 낮게 유지하며 리렌더링 최소화에 신경 씀
