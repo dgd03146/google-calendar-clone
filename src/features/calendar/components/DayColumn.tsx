@@ -1,7 +1,8 @@
+import { useAppDispatch, useAppSelector } from '@/store/hooks';
 import { format } from 'date-fns';
-import { useAppSelector } from '../../../store/hooks';
 import { EVENT_COLORS } from '../config/eventColors';
 import { CALENDAR_LAYOUT_CONFIG } from '../config/layoutConfig';
+import { openCreateModal, openEditModal } from '../store/eventsModalSlice';
 import { selectAllEvents, selectEventsDayEvents } from '../store/eventsSlice';
 import type { CalendarEvent } from '../types/event';
 import { get24Hours } from '../utils/dateUtils';
@@ -11,17 +12,30 @@ import { EventBlock } from './EventBlock';
 
 interface DayColumnProps {
   day: Date;
-  onCellClick?: (day: Date, hour: number) => void;
-  onEventClick?: (event: CalendarEvent) => void;
 }
 
-export const DayColumn = ({ day, onCellClick, onEventClick }: DayColumnProps) => {
+export const DayColumn = ({ day }: DayColumnProps) => {
+  const dispatch = useAppDispatch();
   const allEvents = useAppSelector(selectAllEvents);
   const formattedDay = format(day, 'yyyy-MM-dd');
   const dayEvents = useAppSelector(state => selectEventsDayEvents(state, formattedDay));
 
   const hours = get24Hours();
   const cellHeight = CALENDAR_LAYOUT_CONFIG.CELL_HEIGHT;
+
+  const handleCellClick = (day: Date, hour: number) => {
+    dispatch(
+      openCreateModal({
+        date: day,
+        hour: hour,
+        minute: 0,
+      })
+    );
+  };
+
+  const handleEventClick = (event: CalendarEvent) => {
+    dispatch(openEditModal(event.id));
+  };
 
   const getEventColor = (event: CalendarEvent) => {
     const index = dayEvents.findIndex(e => e.id === event.id);
@@ -33,7 +47,7 @@ export const DayColumn = ({ day, onCellClick, onEventClick }: DayColumnProps) =>
     <div className="relative">
       <div className="grid grid-rows-24">
         {hours.map(hour => (
-          <CalendarCell key={hour} day={day} hour={hour} onCellClick={onCellClick} />
+          <CalendarCell key={hour} day={day} hour={hour} onCellClick={handleCellClick} />
         ))}
       </div>
 
@@ -58,7 +72,7 @@ export const DayColumn = ({ day, onCellClick, onEventClick }: DayColumnProps) =>
                 paddingRight: '2px',
               }}
             >
-              <EventBlock event={event} onEventClick={onEventClick} colorClass={colorClass} />
+              <EventBlock event={event} onEventClick={handleEventClick} colorClass={colorClass} />
             </div>
           );
         })}

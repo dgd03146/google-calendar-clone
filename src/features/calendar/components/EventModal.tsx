@@ -1,12 +1,22 @@
-import { useAppDispatch } from '@/store/hooks';
+import { useClickOutside } from '@/hooks/useClickOutside';
+import { useAppDispatch, useAppSelector } from '@/store/hooks';
 import { format, parse } from 'date-fns';
 import { ko } from 'date-fns/locale';
 import { ChevronDown, Clock, Repeat, Trash2, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { toast } from 'react-toastify';
 import { EVENT_CONFIG } from '../config/eventConfig';
-import { addEvent, deleteEvent, updateEvent } from '../store/eventsSlice';
-import type { CalendarEvent, CreateEventData, RepeatType } from '../types/event';
+import {
+  closeModal,
+  selectIsModalOpen,
+  selectModalEditingEventId,
+  selectModalSelectedDate,
+  selectModalSelectedHour,
+  selectModalSelectedMinute,
+} from '../store/eventsModalSlice';
+import { addEvent, deleteEvent, selectEventById, updateEvent } from '../store/eventsSlice';
+import type { CreateEventData, RepeatType } from '../types/event';
 import {
   calculateEndTime,
   formatTimeWithPeriod,
@@ -14,14 +24,6 @@ import {
   parseTime,
 } from '../utils/timeUtils';
 import { MiniCalendar } from './MiniCalendar';
-
-interface EventModalProps {
-  isOpen: boolean;
-  onClose: () => void;
-  selectedDate?: Date;
-  selectedHour?: number;
-  editingEvent?: CalendarEvent | null;
-}
 
 interface EventFormState extends Omit<CreateEventData, 'date'> {
   date: Date;
@@ -34,22 +36,26 @@ interface DropdownState {
   showRepeatDropdown: boolean;
 }
 
-export const EventModal = ({
-  isOpen,
-  onClose,
-  selectedDate = new Date(),
-  selectedHour = 9,
-  editingEvent,
-}: EventModalProps) => {
+export const EventModal = () => {
   const dispatch = useAppDispatch();
+
+  const isOpen = useAppSelector(selectIsModalOpen);
+  const selectedDate = useAppSelector(selectModalSelectedDate);
+  const selectedHour = useAppSelector(selectModalSelectedHour);
+  const selectedMinute = useAppSelector(selectModalSelectedMinute);
+  const editingEventId = useAppSelector(selectModalEditingEventId);
+  const editingEvent = useAppSelector(state =>
+    editingEventId ? selectEventById(state, editingEventId) : null
+  );
+
   const modalRef = useRef<HTMLDivElement>(null);
   const isEditMode = !!editingEvent;
 
   const [formState, setFormState] = useState<EventFormState>(() => ({
     title: editingEvent?.title || '',
     date: editingEvent ? parse(editingEvent.date, 'yyyy-MM-dd', new Date()) : selectedDate,
-    startTime: editingEvent?.startTime || `${selectedHour.toString().padStart(2, '0')}:00`,
-    endTime: editingEvent?.endTime || `${(selectedHour + 1).toString().padStart(2, '0')}:00`,
+    startTime: editingEvent?.startTime || '',
+    endTime: editingEvent?.endTime || '',
     repeatType: editingEvent?.repeatType || EVENT_CONFIG.DEFAULT_REPEAT_TYPE,
   }));
 
@@ -106,30 +112,16 @@ export const EventModal = ({
 
   useEffect(() => {
     if (!editingEvent) {
-      const newStartTime = `${selectedHour.toString().padStart(2, '0')}:00`;
+      const newStartTime = `${selectedHour.toString().padStart(2, '0')}:${selectedMinute.toString().padStart(2, '0')}`;
       const newEndTime = calculateEndTime(newStartTime);
       updateFormState({
         startTime: newStartTime,
         endTime: newEndTime,
       });
     }
-  }, [selectedHour, editingEvent]);
+  }, [selectedHour, selectedMinute, editingEvent]);
 
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (modalRef.current && !modalRef.current.contains(event.target as Node)) {
-        onClose();
-      }
-    };
-
-    if (isOpen) {
-      document.addEventListener('mousedown', handleClickOutside);
-    }
-
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, [isOpen, onClose]);
+  useClickOutside(modalRef, () => dispatch(closeModal()), isOpen);
 
   const timeOptions = generateTimeOptions();
 
@@ -194,38 +186,40 @@ export const EventModal = ({
 
       if (isEditMode && editingEvent) {
         dispatch(updateEvent({ id: editingEvent.id, data: eventData }));
-        alert('이벤트가 수정되었습니다!');
+        toast.success('이벤트가 수정되었습니다!');
       } else {
         dispatch(addEvent(eventData));
-        alert('이벤트가 저장되었습니다!');
+        toast.success('이벤트가 저장되었습니다!');
       }
 
       if (!isEditMode) {
         updateFormState({ title: '', repeatType: EVENT_CONFIG.DEFAULT_REPEAT_TYPE });
       }
 
-      onClose();
+      handleClose();
     } catch (error) {
       console.error('Failed to save event:', error);
-      alert('이벤트 저장에 실패했습니다. 다시 시도해주세요.');
+      toast.error('이벤트 저장에 실패했습니다. 다시 시도해주세요.');
     } finally {
       setIsSaving(false);
     }
   };
 
-  const handleDelete = async () => {
+  const handleDelete = () => {
     if (!editingEvent) return;
 
-    if (confirm('이벤트를 삭제하시겠습니까?')) {
-      try {
-        dispatch(deleteEvent(editingEvent.id));
-        alert('이벤트가 삭제되었습니다!');
-        onClose();
-      } catch (error) {
-        console.error('Failed to delete event:', error);
-        alert('이벤트 삭제에 실패했습니다. 다시 시도해주세요.');
-      }
+    try {
+      dispatch(deleteEvent(editingEvent.id));
+      toast.success('이벤트가 삭제되었습니다!');
+      handleClose();
+    } catch (error) {
+      console.error('Failed to delete event:', error);
+      toast.error('이벤트 삭제에 실패했습니다. 다시 시도해주세요.');
     }
+  };
+
+  const handleClose = () => {
+    dispatch(closeModal());
   };
 
   if (!isOpen) return null;
@@ -253,7 +247,7 @@ export const EventModal = ({
               </button>
             )}
             <button
-              onClick={onClose}
+              onClick={handleClose}
               className="p-1 hover:bg-gray-100 rounded-full transition-colors"
             >
               <X className="h-4 w-4 text-gray-500" />
@@ -416,7 +410,7 @@ export const EventModal = ({
           <div className="flex justify-end space-x-2 pt-4">
             <button
               type="button"
-              onClick={onClose}
+              onClick={handleClose}
               className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-md transition-colors"
             >
               취소

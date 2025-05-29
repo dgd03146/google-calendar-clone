@@ -4,14 +4,14 @@ import type { CalendarEvent } from '../types/event';
 
 interface EventBlockProps {
   event: CalendarEvent;
-  onEventClick?: (event: CalendarEvent) => void;
-  colorClass?: string;
+  colorClass: string;
+  onEventClick: (event: CalendarEvent) => void;
 }
 
-export const EventBlock = ({ event, onEventClick, colorClass }: EventBlockProps) => {
+export const EventBlock = ({ event, colorClass, onEventClick }: EventBlockProps) => {
   const handleClick = (e: React.MouseEvent) => {
     e.stopPropagation();
-    onEventClick?.(event);
+    onEventClick(event);
   };
 
   const finalColorClass = colorClass || EVENT_COLORS[0];
