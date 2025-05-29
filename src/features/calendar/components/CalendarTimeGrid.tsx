@@ -3,7 +3,7 @@ import { formatHour } from '../utils/timeUtils';
 
 interface CalendarTimeGridProps {
   currentDate: Date;
-  onCellClick?: (day: Date, hour: number, event: React.MouseEvent) => void;
+  onCellClick?: (day: Date, hour: number) => void;
 }
 
 export const CalendarTimeGrid = ({ currentDate, onCellClick }: CalendarTimeGridProps) => {
@@ -29,8 +29,10 @@ export const CalendarTimeGrid = ({ currentDate, onCellClick }: CalendarTimeGridP
               {hours.map(hour => (
                 <div
                   key={`${day.toISOString()}-${hour}`}
-                  className="h-20 border-b border-gray-100 hover:bg-blue-50 transition-colors"
-                  onClick={onCellClick ? event => onCellClick(day, hour, event) : undefined}
+                  className={`h-20 border-b border-gray-100 hover:bg-blue-50 transition-colors ${
+                    onCellClick ? 'cursor-pointer' : ''
+                  }`}
+                  onClick={onCellClick ? () => onCellClick(day, hour) : undefined}
                 />
               ))}
             </div>
