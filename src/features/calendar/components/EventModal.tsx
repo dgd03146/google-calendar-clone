@@ -1,6 +1,12 @@
 import { ChevronDown, Clock, X } from 'lucide-react';
 import { useState } from 'react';
 import { createPortal } from 'react-dom';
+import {
+  calculateEndTime,
+  formatTimeWithPeriod,
+  generateTimeOptions,
+  parseTime,
+} from '../utils/timeUtils';
 
 interface EventModalProps {
   isOpen: boolean;
@@ -8,13 +14,6 @@ interface EventModalProps {
   selectedDate?: Date;
   selectedHour?: number;
   position?: { x: number; y: number };
-}
-
-interface TimeOption {
-  value: string;
-  label: string;
-  hour: number;
-  minute: number;
 }
 
 export const EventModal = ({
@@ -29,46 +28,6 @@ export const EventModal = ({
   const [endTime, setEndTime] = useState(`${(selectedHour + 1).toString().padStart(2, '0')}:00`);
   const [showStartTimeDropdown, setShowStartTimeDropdown] = useState(false);
   const [showEndTimeDropdown, setShowEndTimeDropdown] = useState(false);
-
-  const formatTimeWithPeriod = (hour: number, minute: number = 0): string => {
-    const period = hour < 12 ? '오전' : '오후';
-    const displayHour = hour === 0 ? 12 : hour > 12 ? hour - 12 : hour;
-    const minuteStr = minute.toString().padStart(2, '0');
-    return `${period} ${displayHour}:${minuteStr}`;
-  };
-
-  const generateTimeOptions = (): TimeOption[] => {
-    const options = [];
-    for (let hour = 0; hour < 24; hour++) {
-      for (let minute = 0; minute < 60; minute += 15) {
-        const value = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
-        const label = formatTimeWithPeriod(hour, minute);
-        options.push({ value, label, hour, minute });
-      }
-    }
-    return options;
-  };
-
-  const parseTime = (timeString: string): { hour: number; minute: number } => {
-    const [hourStr, minuteStr] = timeString.split(':');
-    return {
-      hour: parseInt(hourStr, 10),
-      minute: parseInt(minuteStr, 10),
-    };
-  };
-
-  const calculateEndTime = (startTimeValue: string): string => {
-    const { hour, minute } = parseTime(startTimeValue);
-    let endHour = hour + 1;
-    let endMinute = minute;
-
-    if (endHour >= 24) {
-      endHour = 23;
-      endMinute = 59;
-    }
-
-    return `${endHour.toString().padStart(2, '0')}:${endMinute.toString().padStart(2, '0')}`;
-  };
 
   const timeOptions = generateTimeOptions();
 
