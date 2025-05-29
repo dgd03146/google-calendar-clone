@@ -1,19 +1,11 @@
-import type { CalendarEvent } from '../types/event';
+import { useAppSelector } from '@/store/hooks';
+import { selectCurrentDate } from '../store/calendarSlice';
 import { get24Hours, getWeekDays } from '../utils/dateUtils';
 import { formatHour } from '../utils/timeUtils';
 import { DayColumn } from './DayColumn';
 
-interface CalendarTimeGridProps {
-  currentDate: Date;
-  onCellClick?: (day: Date, hour: number) => void;
-  onEventClick?: (event: CalendarEvent) => void;
-}
-
-export const CalendarTimeGrid = ({
-  currentDate,
-  onCellClick,
-  onEventClick,
-}: CalendarTimeGridProps) => {
+export const CalendarTimeGrid = () => {
+  const currentDate = useAppSelector(selectCurrentDate);
   const weekDays = getWeekDays(currentDate);
   const hours = get24Hours();
 
@@ -33,7 +25,7 @@ export const CalendarTimeGrid = ({
         <div className="flex-1 grid grid-cols-7">
           {weekDays.map(day => (
             <div key={day.toISOString()} className="border-r border-gray-200 last:border-r-0">
-              <DayColumn day={day} onCellClick={onCellClick} onEventClick={onEventClick} />
+              <DayColumn day={day} />
             </div>
           ))}
         </div>
