@@ -1,5 +1,7 @@
+import { format } from 'date-fns';
+import { ko } from 'date-fns/locale';
 import { ChevronDown, Clock, X } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
   calculateEndTime,
@@ -7,6 +9,7 @@ import {
   generateTimeOptions,
   parseTime,
 } from '../utils/timeUtils';
+import { MiniCalendar } from './MiniCalendar';
 
 interface EventModalProps {
   isOpen: boolean;
@@ -24,12 +27,30 @@ export const EventModal = ({
   position = { x: 0, y: 0 },
 }: EventModalProps) => {
   const [title, setTitle] = useState('');
+  const [date, setDate] = useState(selectedDate);
   const [startTime, setStartTime] = useState(`${selectedHour.toString().padStart(2, '0')}:00`);
   const [endTime, setEndTime] = useState(`${(selectedHour + 1).toString().padStart(2, '0')}:00`);
+  const [showDatePicker, setShowDatePicker] = useState(false);
   const [showStartTimeDropdown, setShowStartTimeDropdown] = useState(false);
   const [showEndTimeDropdown, setShowEndTimeDropdown] = useState(false);
 
+  useEffect(() => {
+    setDate(selectedDate);
+  }, [selectedDate]);
+
+  useEffect(() => {
+    const newStartTime = `${selectedHour.toString().padStart(2, '0')}:00`;
+    const newEndTime = calculateEndTime(newStartTime);
+    setStartTime(newStartTime);
+    setEndTime(newEndTime);
+  }, [selectedHour]);
+
   const timeOptions = generateTimeOptions();
+
+  const handleDateSelect = (newDate: Date) => {
+    setDate(newDate);
+    setShowDatePicker(false);
+  };
 
   const handleStartTimeChange = (timeValue: string) => {
     setStartTime(timeValue);
@@ -44,11 +65,12 @@ export const EventModal = ({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    console.log('Event created:', { title, selectedDate, startTime, endTime });
+    console.log('Event created:', { title, date, startTime, endTime });
     onClose();
   };
 
   const handleOverlayClick = () => {
+    setShowDatePicker(false);
     setShowStartTimeDropdown(false);
     setShowEndTimeDropdown(false);
   };
@@ -93,9 +115,26 @@ export const EventModal = ({
 
           <div className="flex items-start space-x-3 py-2">
             <Clock className="h-4 w-4 text-gray-500 mt-1" />
-            <div className="flex-1">
-              <div className="text-sm text-gray-700 mb-2">
-                {selectedDate.toLocaleDateString('ko-KR')}
+            <div className="flex-1 space-y-3">
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowDatePicker(!showDatePicker);
+                    setShowStartTimeDropdown(false);
+                    setShowEndTimeDropdown(false);
+                  }}
+                  className="flex items-center justify-between w-full text-sm text-gray-700 hover:bg-gray-50 p-2 rounded border"
+                >
+                  <span>{format(date, 'M월 d일 (E)', { locale: ko })}</span>
+                  <ChevronDown className="h-3 w-3 text-gray-500" />
+                </button>
+
+                {showDatePicker && (
+                  <div className="absolute top-full left-0 mt-1 bg-white border border-gray-200 rounded-md shadow-lg z-30">
+                    <MiniCalendar selectedDate={date} onDateSelect={handleDateSelect} />
+                  </div>
+                )}
               </div>
 
               <div className="flex items-center space-x-2">
@@ -104,6 +143,7 @@ export const EventModal = ({
                     type="button"
                     onClick={() => {
                       setShowStartTimeDropdown(!showStartTimeDropdown);
+                      setShowDatePicker(false);
                       setShowEndTimeDropdown(false);
                     }}
                     className="flex items-center justify-between w-full text-sm text-gray-600 hover:bg-gray-50 p-2 rounded border"
@@ -137,6 +177,7 @@ export const EventModal = ({
                     type="button"
                     onClick={() => {
                       setShowEndTimeDropdown(!showEndTimeDropdown);
+                      setShowDatePicker(false);
                       setShowStartTimeDropdown(false);
                     }}
                     className="flex items-center justify-between w-full text-sm text-gray-600 hover:bg-gray-50 p-2 rounded border"
