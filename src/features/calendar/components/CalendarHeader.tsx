@@ -10,41 +10,60 @@ import {
 } from 'lucide-react';
 
 import { useBreakpoint } from '@/hooks/useBreakpoint';
-import { addWeeks, format, subWeeks } from 'date-fns';
+import { useClickOutside } from '@/hooks/useClickOutside';
+import { useAppDispatch, useAppSelector } from '@/store/hooks';
+import { format } from 'date-fns';
 import { ko } from 'date-fns/locale';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
+import {
+  goToNextWeek,
+  goToPrevWeek,
+  goToToday,
+  selectCurrentDate,
+  selectViewMode,
+  setViewMode,
+} from '../store/calendarSlice';
 
 export const CalendarHeader = () => {
   const breakpoint = useBreakpoint();
+  const dispatch = useAppDispatch();
 
-  // TODO: Redux toolkit으로 전역 상태 관리
-  const [currentDate, setCurrentDate] = useState(new Date());
-  const [viewMode, setViewMode] = useState<'month' | 'week'>('week');
+  const currentDate = useAppSelector(selectCurrentDate);
+  const viewMode = useAppSelector(selectViewMode);
+
   const [isViewDropdownOpen, setIsViewDropdownOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
 
   const handlePrevWeek = () => {
-    setCurrentDate(subWeeks(currentDate, 1));
+    dispatch(goToPrevWeek());
   };
 
   const handleNextWeek = () => {
-    setCurrentDate(addWeeks(currentDate, 1));
+    dispatch(goToNextWeek());
   };
 
   const handleToday = () => {
-    setCurrentDate(new Date());
+    dispatch(goToToday());
   };
 
-  const toggleViewDropdown = () => {
+  const toggleViewDropdown = (e: React.MouseEvent) => {
+    e.stopPropagation();
     setIsViewDropdownOpen(prev => !prev);
   };
 
   const handleViewChange = (mode: 'month' | 'week') => {
-    setViewMode(mode);
+    dispatch(setViewMode(mode));
     setIsViewDropdownOpen(false);
   };
 
+  const closeDropdown = () => {
+    setIsViewDropdownOpen(false);
+  };
+
+  useClickOutside(dropdownRef, closeDropdown, isViewDropdownOpen);
+
   return (
-    <header className="flex items-center justify-between py-2 px-4 border-b border-gray-200 bg-white max-h-[64px] min-h-[64px] sticky top-[0px] z-10">
+    <header className="flex items-center justify-between py-2 px-4 border-b border-gray-200 bg-white max-h-[64px] min-h-[64px] sticky top-[0px] z-20">
       {!breakpoint.isMobile && (
         <div className="items-center gap-4 w-[256px] pr-[25px] flex">
           <button>
@@ -92,7 +111,7 @@ export const CalendarHeader = () => {
         </div>
 
         <div className="flex items-center gap-4">
-          <div className="relative">
+          <div className="relative" ref={dropdownRef}>
             <button
               onClick={toggleViewDropdown}
               className="flex items-center border border-gray-200 rounded-md px-3 py-1 text-sm "
@@ -102,7 +121,7 @@ export const CalendarHeader = () => {
             </button>
 
             {isViewDropdownOpen && (
-              <div className="absolute right-0 mt-1 bg-white border border-gray-200 rounded-md shadow-md z-10">
+              <div className="absolute right-0 mt-1 bg-white border border-gray-200 rounded-md shadow-md z-50">
                 <button
                   onClick={() => handleViewChange('week')}
                   className={`block w-full text-left px-4 py-2 text-sm ${
