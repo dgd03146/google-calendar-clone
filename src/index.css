@@ -14,3 +14,7 @@
   --color-button-text: #ffffff;
   --color-time-label: #3c4043;
 }
+
+button {
+  @apply cursor-pointer;
+}
