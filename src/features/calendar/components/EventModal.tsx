@@ -1,10 +1,9 @@
 import { useBreakpoint } from '@/hooks/useBreakpoint';
 import { format } from 'date-fns';
 import { ko } from 'date-fns/locale';
-import { ChevronDown, Clock, X } from 'lucide-react';
+import { ChevronDown, Clock, Repeat, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { calculateModalPosition } from '../utils/modalPositionCalculator';
 import {
   calculateEndTime,
   formatTimeWithPeriod,
@@ -37,7 +36,8 @@ export const EventModal = ({
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showStartTimeDropdown, setShowStartTimeDropdown] = useState(false);
   const [showEndTimeDropdown, setShowEndTimeDropdown] = useState(false);
-  const [modalPosition, setModalPosition] = useState(position);
+  const [repeatType, setRepeatType] = useState<'none' | 'daily' | 'weekly' | 'monthly'>('none');
+  const [showRepeatDropdown, setShowRepeatDropdown] = useState(false);
 
   useEffect(() => {
     setDate(selectedDate);
@@ -49,18 +49,6 @@ export const EventModal = ({
     setStartTime(newStartTime);
     setEndTime(newEndTime);
   }, [selectedHour]);
-
-  useEffect(() => {
-    setModalPosition(position);
-  }, [position]);
-
-  useEffect(() => {
-    if (isOpen) {
-      const rect = new DOMRect(modalPosition.x, modalPosition.y, 0, 0);
-      const newPosition = calculateModalPosition({ rect, viewport: breakpoint });
-      setModalPosition(newPosition);
-    }
-  }, [breakpoint.width, breakpoint.height, isOpen]);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -102,9 +90,29 @@ export const EventModal = ({
     setShowEndTimeDropdown(false);
   };
 
+  const handleRepeatChange = (type: 'none' | 'daily' | 'weekly' | 'monthly') => {
+    setRepeatType(type);
+    setShowRepeatDropdown(false);
+  };
+
+  const getRepeatLabel = (type: 'none' | 'daily' | 'weekly' | 'monthly') => {
+    switch (type) {
+      case 'none':
+        return '반복 안함';
+      case 'daily':
+        return '매일';
+      case 'weekly':
+        return '매주';
+      case 'monthly':
+        return '매월';
+      default:
+        return '반복 안함';
+    }
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    console.log('Event created:', { title, date, startTime, endTime });
+    console.log('Event created:', { title, date, startTime, endTime, repeatType });
     onClose();
   };
 
@@ -118,8 +126,8 @@ export const EventModal = ({
       ref={modalRef}
       className="fixed z-50 bg-white rounded-lg shadow-xl border border-gray-200"
       style={{
-        left: `${modalPosition.x}px`,
-        top: `${modalPosition.y}px`,
+        left: `${position.x}px`,
+        top: `${position.y}px`,
         width: `${modalWidth}px`,
       }}
     >
@@ -152,6 +160,7 @@ export const EventModal = ({
                   setShowDatePicker(!showDatePicker);
                   setShowStartTimeDropdown(false);
                   setShowEndTimeDropdown(false);
+                  setShowRepeatDropdown(false);
                 }}
                 className="flex items-center justify-between w-full text-sm text-gray-700 hover:bg-gray-50 p-2 rounded border"
               >
@@ -174,6 +183,7 @@ export const EventModal = ({
                     setShowStartTimeDropdown(!showStartTimeDropdown);
                     setShowDatePicker(false);
                     setShowEndTimeDropdown(false);
+                    setShowRepeatDropdown(false);
                   }}
                   className="flex items-center justify-between w-full text-sm text-gray-600 hover:bg-gray-50 p-2 rounded border"
                 >
@@ -206,6 +216,7 @@ export const EventModal = ({
                     setShowEndTimeDropdown(!showEndTimeDropdown);
                     setShowDatePicker(false);
                     setShowStartTimeDropdown(false);
+                    setShowRepeatDropdown(false);
                   }}
                   className="flex items-center justify-between w-full text-sm text-gray-600 hover:bg-gray-50 p-2 rounded border"
                 >
@@ -228,6 +239,49 @@ export const EventModal = ({
                   </div>
                 )}
               </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="flex items-start space-x-3 py-2">
+          <Repeat className="h-4 w-4 text-gray-500 mt-1" />
+          <div className="flex-1">
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowRepeatDropdown(!showRepeatDropdown);
+                  setShowDatePicker(false);
+                  setShowStartTimeDropdown(false);
+                  setShowEndTimeDropdown(false);
+                }}
+                className="flex items-center justify-between w-full text-sm text-gray-700 hover:bg-gray-50 p-2 rounded border"
+              >
+                <span>{getRepeatLabel(repeatType)}</span>
+                <ChevronDown className="h-3 w-3 text-gray-500" />
+              </button>
+
+              {showRepeatDropdown && (
+                <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-md shadow-lg z-30">
+                  {[
+                    { value: 'none' as const, label: '반복 안함' },
+                    { value: 'daily' as const, label: '매일' },
+                    { value: 'weekly' as const, label: '매주' },
+                    { value: 'monthly' as const, label: '매월' },
+                  ].map(option => (
+                    <button
+                      key={option.value}
+                      type="button"
+                      onClick={() => handleRepeatChange(option.value)}
+                      className={`block w-full text-left px-3 py-2 text-sm hover:bg-gray-50 ${
+                        repeatType === option.value ? 'bg-blue-50 text-blue-700' : 'text-gray-700'
+                      }`}
+                    >
+                      {option.label}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         </div>
