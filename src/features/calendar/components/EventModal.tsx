@@ -1,8 +1,10 @@
+import { useBreakpoint } from '@/hooks/useBreakpoint';
 import { format } from 'date-fns';
 import { ko } from 'date-fns/locale';
 import { ChevronDown, Clock, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { calculateModalPosition } from '../utils/modalPositionCalculator';
 import {
   calculateEndTime,
   formatTimeWithPeriod,
@@ -26,6 +28,7 @@ export const EventModal = ({
   selectedHour = 9,
   position = { x: 0, y: 0 },
 }: EventModalProps) => {
+  const breakpoint = useBreakpoint();
   const modalRef = useRef<HTMLDivElement>(null);
   const [title, setTitle] = useState('');
   const [date, setDate] = useState(selectedDate);
@@ -34,6 +37,7 @@ export const EventModal = ({
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showStartTimeDropdown, setShowStartTimeDropdown] = useState(false);
   const [showEndTimeDropdown, setShowEndTimeDropdown] = useState(false);
+  const [modalPosition, setModalPosition] = useState(position);
 
   useEffect(() => {
     setDate(selectedDate);
@@ -45,6 +49,18 @@ export const EventModal = ({
     setStartTime(newStartTime);
     setEndTime(newEndTime);
   }, [selectedHour]);
+
+  useEffect(() => {
+    setModalPosition(position);
+  }, [position]);
+
+  useEffect(() => {
+    if (isOpen) {
+      const rect = new DOMRect(modalPosition.x, modalPosition.y, 0, 0);
+      const newPosition = calculateModalPosition({ rect, viewport: breakpoint });
+      setModalPosition(newPosition);
+    }
+  }, [breakpoint.width, breakpoint.height, isOpen]);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -63,6 +79,12 @@ export const EventModal = ({
   }, [isOpen, onClose]);
 
   const timeOptions = generateTimeOptions();
+
+  const modalWidth = breakpoint.isMobile
+    ? Math.min(breakpoint.width - 20, 360)
+    : breakpoint.isTablet
+      ? 400
+      : 448;
 
   const handleDateSelect = (newDate: Date) => {
     setDate(newDate);
@@ -94,10 +116,11 @@ export const EventModal = ({
   const modalContent = (
     <div
       ref={modalRef}
-      className="fixed z-50 bg-white rounded-lg shadow-xl border border-gray-200 w-96"
+      className="fixed z-50 bg-white rounded-lg shadow-xl border border-gray-200"
       style={{
-        left: `${position.x}px`,
-        top: `${position.y}px`,
+        left: `${modalPosition.x}px`,
+        top: `${modalPosition.y}px`,
+        width: `${modalWidth}px`,
       }}
     >
       <div className="flex items-center justify-between py-2 px-4 border-b border-gray-200">

@@ -1,9 +1,12 @@
+import { useBreakpoint } from '@/hooks/useBreakpoint';
 import { useState } from 'react';
+import { calculateModalPosition } from '../utils/modalPositionCalculator';
 import { CalendarTimeGrid } from './CalendarTimeGrid';
 import { CalendarWeekHeader } from './CalendarWeekHeader';
 import { EventModal } from './EventModal';
 
 export const CalendarMain = () => {
+  const breakpoint = useBreakpoint();
   const currentDate = new Date();
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [selectedHour, setSelectedHour] = useState<number>(9);
@@ -12,13 +15,11 @@ export const CalendarMain = () => {
 
   const handleCellClick = (day: Date, hour: number, event: React.MouseEvent) => {
     const rect = (event.target as HTMLElement).getBoundingClientRect();
+    const position = calculateModalPosition({ rect, viewport: breakpoint });
 
     setSelectedDate(day);
     setSelectedHour(hour);
-    setModalPosition({
-      x: rect.left + rect.width + 10,
-      y: rect.top,
-    });
+    setModalPosition(position);
     setIsModalOpen(true);
   };
 
