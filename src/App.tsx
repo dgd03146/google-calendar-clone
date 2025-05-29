@@ -1,16 +1,15 @@
-import { CalendarHeader } from '@/features/calendar/components/CalendarHeader';
-import { CalendarSidebar } from '@/features/calendar/components/CalendarSidebar';
-import { CalendarMain } from '@/features/calendar/components/CalendarMain';
+import { Provider } from 'react-redux';
+import { PersistGate } from 'redux-persist/integration/react';
+import { Calendar } from './features/calendar';
+import { persistor, store } from './store';
 
 function App() {
   return (
-    <div className="flex flex-col h-dvh">
-      <CalendarHeader />
-      <main className="flex flex-1">
-        <CalendarSidebar />
-        <CalendarMain />
-      </main>
-    </div>
+    <Provider store={store}>
+      <PersistGate loading={null} persistor={persistor}>
+        <Calendar />
+      </PersistGate>
+    </Provider>
   );
 }
 
